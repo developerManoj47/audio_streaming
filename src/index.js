@@ -16,6 +16,10 @@ app.use(cors()); // allow requests from other origins
 
 const ASSETS_PATH = path.join(__dirname, "assets"); // path to the assets
 
+app.get("/", (req, res) => {
+  res.send("Server is running!");
+});
+
 // API endpoint to stream audio from server to a BROWSER
 // app.get("/audio", (req, res) => {
 //   const filePath = path.join(ASSETS_PATH, "audio.mp3"); // path to audio file
