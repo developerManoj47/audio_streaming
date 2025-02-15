@@ -51,67 +51,67 @@ app.get("/", (req, res) => {
 // });
 
 // using ffmpeg when audio file formate is mp3 so we need to decode
-app.get("/audio", (req, res) => {
-  const filePath = path.join(ASSETS_PATH, "audio.mp3"); // Path to your audio file
-
-  res.set({
-    "Content-Type": "audio/wav",
-    "Transfer-Encoding": "chunked",
-    "Cache-Control": "no-cache",
-    Connection: "keep-alive",
-  });
-
-  const ffmpeg = spawn("ffmpeg", [
-    "-loglevel",
-    "fatal",
-    "-hide_banner",
-    "-i",
-    filePath,
-    "-f",
-    "wav", // Use mp3 directly instead of wav
-    "-ac",
-    "2", // Stereo channels
-    "-ar",
-    "44100", // Sample rate
-    "-b:a",
-    "128k", // Lower bitrate to reduce CPU load
-    "-bufsize",
-    "512k", // Adjust buffer size for smoother streaming
-    "-fflags",
-    "nobuffer", // Reduce buffering latency
-    "pipe:1",
-  ]);
-
-  ffmpeg.stdout.pipe(res);
-
-  ffmpeg.stderr.on("data", (data) => {
-    console.log(`FFmpeg error : ${data}`);
-  });
-
-  ffmpeg.on("close", (code) => {
-    console.log(`FFmpeg process exited with code ${code}`);
-  });
-
-  // const stream = createReadStream(filePath);
-  // stream.pipe(res);
-});
-
-// audio stream when there is wav audio file that is  uncompressed
 // app.get("/audio", (req, res) => {
-//   const filePath = path.join(ASSETS_PATH, "audio.wav"); // Use a WAV file
-//   const audioSize = statSync(filePath).size;
+//   const filePath = path.join(ASSETS_PATH, "audio.mp3"); // Path to your audio file
 
-//   // Set streaming headers
-//   res.writeHead(200, {
+//   res.set({
 //     "Content-Type": "audio/wav",
-//     "Content-Length": audioSize,
 //     "Transfer-Encoding": "chunked",
+//     "Cache-Control": "no-cache",
+//     Connection: "keep-alive",
 //   });
 
-//   // Stream the raw WAV file
-//   const stream = createReadStream(filePath);
-//   stream.pipe(res);
+//   const ffmpeg = spawn("ffmpeg", [
+//     "-loglevel",
+//     "fatal",
+//     "-hide_banner",
+//     "-i",
+//     filePath,
+//     "-f",
+//     "wav", // Use mp3 directly instead of wav
+//     "-ac",
+//     "2", // Stereo channels
+//     "-ar",
+//     "44100", // Sample rate
+//     "-b:a",
+//     "128k", // Lower bitrate to reduce CPU load
+//     "-bufsize",
+//     "512k", // Adjust buffer size for smoother streaming
+//     "-fflags",
+//     "nobuffer", // Reduce buffering latency
+//     "pipe:1",
+//   ]);
+
+//   ffmpeg.stdout.pipe(res);
+
+//   ffmpeg.stderr.on("data", (data) => {
+//     console.log(`FFmpeg error : ${data}`);
+//   });
+
+//   ffmpeg.on("close", (code) => {
+//     console.log(`FFmpeg process exited with code ${code}`);
+//   });
+
+//   // const stream = createReadStream(filePath);
+//   // stream.pipe(res);
 // });
+
+// audio stream when there is wav audio file that is  uncompressed
+app.get("/audio", (req, res) => {
+  const filePath = path.join(ASSETS_PATH, "audio.wav"); // Use a WAV file
+  const audioSize = statSync(filePath).size;
+
+  // Set streaming headers
+  res.writeHead(200, {
+    "Content-Type": "audio/wav",
+    "Content-Length": audioSize,
+    "Transfer-Encoding": "chunked",
+  });
+
+  // Stream the raw WAV file
+  const stream = createReadStream(filePath);
+  stream.pipe(res);
+});
 
 // API endpoint to stream video from
 app.get("/video", (req, res) => {
