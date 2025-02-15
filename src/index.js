@@ -51,6 +51,32 @@ app.get("/", (req, res) => {
 //   stream.pipe(res);
 // });
 
+// updated : API endpoint to stream audio from server to a BROWSER
+app.get("/audio", (req, res) => {
+  const filePath = path.join(ASSETS_PATH, "audio.mp3");
+  const CHUNK_SIZE = 8 * 1024; // 8KB chunk size (adjust as needed)
+
+  const range = req.headers.range || "bytes=0-"; // Default to start if no range
+  const audioSize = statSync(filePath).size;
+
+  const parts = range.replace(/bytes=/, "").split("-");
+  const start = parseInt(parts[0], 10);
+  const end = parts[1] ? parseInt(parts[1], 10) : audioSize - 1;
+  const contentLength = end - start + 1;
+
+  const headers = {
+    "Content-Range": `bytes ${start}-${end}/${audioSize}`,
+    "Accept-Ranges": "bytes",
+    "Content-Length": contentLength,
+    "Content-Type": "audio/mpeg", // Important for the initial request
+  };
+
+  res.writeHead(206, headers);
+
+  const stream = createReadStream(filePath, { start, end });
+  stream.pipe(res);
+});
+
 // using ffmpeg when audio file formate is mp3 so we need to decode
 // app.get("/audio", (req, res) => {
 //   const filePath = path.join(ASSETS_PATH, "audio.mp3"); // Path to your audio file
@@ -98,22 +124,22 @@ app.get("/", (req, res) => {
 // });
 
 // audio stream when there is wav audio file that is  uncompressed
-app.get("/audio", (req, res) => {
-  const filePath = path.join(ASSETS_PATH, "audio.wav"); // Use a WAV file
-  const audioSize = statSync(filePath).size;
+// app.get("/audio", (req, res) => {
+//   const filePath = path.join(ASSETS_PATH, "audio.wav"); // Use a WAV file
+//   const audioSize = statSync(filePath).size;
 
-  // Set streaming headers
-  res.writeHead(200, {
-    "Content-Type": "audio/wav",
-    "Content-Length": audioSize,
-    "Transfer-Encoding": "chunked",
-    Connection: "keep-alive",
-  });
+//   // Set streaming headers
+//   res.writeHead(200, {
+//     "Content-Type": "audio/wav",
+//     "Content-Length": audioSize,
+//     "Transfer-Encoding": "chunked",
+//     Connection: "keep-alive",
+//   });
 
-  // Stream the raw WAV file
-  const stream = createReadStream(filePath);
-  stream.pipe(res);
-});
+//   // Stream the raw WAV file
+//   const stream = createReadStream(filePath);
+//   stream.pipe(res);
+// });
 
 // API endpoint to stream video from
 app.get("/video", (req, res) => {
