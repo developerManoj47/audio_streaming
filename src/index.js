@@ -4,6 +4,7 @@ const cors = require("cors");
 const path = require("path");
 const { spawn } = require("child_process");
 const fs = require("fs");
+const ffmpeg = require("fluent-ffmpeg");
 
 // define statSync & createReadStream
 const statSync = fs.statSync;
@@ -97,20 +98,43 @@ app.get("/", (req, res) => {
 // });
 
 // audio stream when there is wav audio file that is  uncompressed
-app.get("/audio", (req, res) => {
-  const filePath = path.join(ASSETS_PATH, "audio.wav"); // Use a WAV file
-  const audioSize = statSync(filePath).size;
+// app.get("/audio", (req, res) => {
+//   const filePath = path.join(ASSETS_PATH, "audio.wav"); // Use a WAV file
+//   const audioSize = statSync(filePath).size;
 
-  // Set streaming headers
-  res.writeHead(200, {
+//   // Set streaming headers
+//   res.writeHead(200, {
+//     "Content-Type": "audio/wav",
+//     "Content-Length": audioSize,
+//     "Transfer-Encoding": "chunked",
+//     Connection: "keep-alive",
+//   });
+
+//   // Stream the raw WAV file
+//   const stream = createReadStream(filePath);
+//   stream.pipe(res);
+// });
+
+// new endpoint
+app.get("/audio", (req, res) => {
+  const audioPath = path.join(ASSETS_PATH, "audio.wav");
+
+  // Set response headers
+  res.set({
     "Content-Type": "audio/wav",
-    "Content-Length": audioSize,
     "Transfer-Encoding": "chunked",
+    "Cache-Control": "no-cache",
   });
 
-  // Stream the raw WAV file
-  const stream = createReadStream(filePath);
-  stream.pipe(res);
+  // Stream with ffmpeg
+  ffmpeg(audioPath)
+    .audioCodec("pcm_s16le")
+    .format("wav")
+    .pipe(res)
+    .on("error", (err) => {
+      console.error("FFmpeg error:", err);
+      res.status(500).send("Streaming error.");
+    });
 });
 
 // API endpoint to stream video from
