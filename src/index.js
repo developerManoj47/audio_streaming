@@ -58,19 +58,27 @@ app.get("/audio", (req, res) => {
     "Content-Type": "audio/wav",
     "Transfer-Encoding": "chunked",
     "Cache-Control": "no-cache",
+    Connection: "keep-alive",
   });
 
   const ffmpeg = spawn("ffmpeg", [
     "-loglevel",
     "fatal",
+    "-hide_banner",
     "-i",
     filePath,
     "-f",
-    "wav",
+    "wav", // Use mp3 directly instead of wav
     "-ac",
-    "2",
+    "2", // Stereo channels
     "-ar",
-    "44100",
+    "44100", // Sample rate
+    "-b:a",
+    "128k", // Lower bitrate to reduce CPU load
+    "-bufsize",
+    "512k", // Adjust buffer size for smoother streaming
+    "-fflags",
+    "nobuffer", // Reduce buffering latency
     "pipe:1",
   ]);
 
