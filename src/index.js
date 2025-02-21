@@ -20,6 +20,17 @@ let ffmpegProcess = null;
 let buffer = [];
 let clients = [];
 
+const notifyClients = (connectedClients) => {
+  // Notify all clients that the stream has ended
+  console.log("function called ");
+  console.log("clients length in the function : ", connectedClients.length);
+  for (let i = 0; i < connectedClients.length; i++) {
+    console.log("res ended ");
+    connectedClients[i].end();
+  }
+  clients = [];
+};
+
 // Start the stream
 function startStream() {
   if (isPlaying) return;
@@ -55,14 +66,57 @@ function startStream() {
   ffmpegProcess.on("exit", (code, signal) => {
     if (code === 0) {
       console.log("FFmpeg finished successfully");
+      isPlaying = false;
+      ffmpegProcess = null;
+
+      // Notify all clients
+      notifyClients(clients);
+      buffer = [];
+      // clients = [];
+      console.log("Audio stream stopped.");
+      console.log("Clients length : ", clients.length);
     } else {
       console.log(`FFmpeg exited with code ${code} or signal ${signal}`);
+      isPlaying = false;
+      ffmpegProcess = null;
+
+      // Notify all clients
+      notifyClients(clients);
+
+      buffer = [];
+      // clients = [];
+      console.log("Audio stream stopped.");
+      console.log("Clients length : ", clients.length);
     }
+    // isPlaying = false;
+    // ffmpegProcess = null;
+
+    // // Notify all clients that the stream has ended
+    // clients.forEach((res) => {
+    //   res.end(); // Close the response
+    // });
+
+    // buffer = [];
+    // clients = [];
+    // console.log("Audio stream stopped.");
+  });
+
+  // Add error handling for FFmpeg process
+  ffmpegProcess.on("error", (err) => {
+    console.error("FFmpeg process error:", err);
     isPlaying = false;
     ffmpegProcess = null;
+
+    // Notify all clients that the stream has ended
+    clients.forEach((res) => {
+      console.log("Ending response for client due to error");
+      res.end(); // Close the response
+    });
+
+    // Clear the buffer and clients list
     buffer = [];
     clients = [];
-    console.log("Audio stream stopped.");
+    console.log("Audio stream stopped due to error.");
   });
 }
 
@@ -74,7 +128,7 @@ function stopStream() {
   ffmpegProcess.kill();
   ffmpegProcess = null;
   buffer = [];
-  clients = [];
+  // clients = [];
 }
 
 // startStream();
