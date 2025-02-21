@@ -4,7 +4,6 @@ const cors = require("cors");
 const path = require("path");
 const { spawn } = require("child_process");
 const fs = require("fs");
-const ffmpeg = require("fluent-ffmpeg");
 
 // define statSync & createReadStream
 const statSync = fs.statSync;
@@ -16,159 +15,113 @@ const PORT = 5000; // port that server will run at
 app.use(cors()); // allow requests from other origins
 
 const ASSETS_PATH = path.join(__dirname, "assets"); // path to the assets
+let isPlaying = false;
+let ffmpegProcess = null;
+let buffer = [];
+let clients = [];
+
+// Start the stream
+function startStream() {
+  if (isPlaying) return;
+
+  const audioFilePath = path.join(ASSETS_PATH, "audio.mp3");
+  isPlaying = true;
+  ffmpegProcess = spawn("ffmpeg", [
+    "-re",
+    "-loglevel",
+    "fatal",
+    "-i",
+    audioFilePath,
+    "-f",
+    "mp3",
+    "-b:a",
+    "128k",
+    // "-vn",
+    "pipe:1",
+  ]);
+
+  console.log("Audio stream started.....");
+
+  ffmpegProcess.stdout.on("data", (data) => {
+    buffer.push(data);
+    if (buffer.length > 10) {
+      buffer.shift();
+    }
+    clients.forEach((res) => {
+      res.write(data);
+    });
+  });
+
+  ffmpegProcess.on("exit", (code, signal) => {
+    if (code === 0) {
+      console.log("FFmpeg finished successfully");
+    } else {
+      console.log(`FFmpeg exited with code ${code} or signal ${signal}`);
+    }
+    isPlaying = false;
+    ffmpegProcess = null;
+    buffer = [];
+    clients = [];
+    console.log("Audio stream stopped.");
+  });
+}
+
+// Function to stop the stream
+function stopStream() {
+  if (!isPlaying || !ffmpegProcess) return;
+  isPlaying = false;
+
+  ffmpegProcess.kill();
+  ffmpegProcess = null;
+  buffer = [];
+  clients = [];
+}
+
+// startStream();
 
 app.get("/", (req, res) => {
   res.send("Server is running!");
 });
 
-// API endpoint to stream audio from server to a BROWSER
-// app.get("/audio", (req, res) => {
-//   const filePath = path.join(ASSETS_PATH, "audio.mp3"); // path to audio file
-//   const CHUNK_SIZE = 500 * 1e3; //  0.5MB chunk size
+// using ffmpeg when audio file formate is mp3 so we need to decode
+app.get("/stream", (req, res) => {
+  if (!isPlaying || !ffmpegProcess) {
+    return res.status(503).json({ error: "Stream is not active" });
+  }
+  res.set({
+    "Content-Type": "audio/mpeg",
+    "Transfer-Encoding": "chunked",
+    "Cache-Control": "no-cache",
+    Connection: "keep-alive",
+  });
 
-//   // send audio in chunks
-//   const range = req.headers.range || "0";
-//   const audioSize = statSync(filePath).size; // get audio size
+  // send buffered data first
+  buffer.forEach((chunk) => {
+    res.write(chunk);
+  });
 
-//   // define start and end of current chunk
-//   const start = Number(range.replace(/\D/g, ""));
-//   const end = Math.min(start + CHUNK_SIZE, audioSize - 1);
-//   const contentLength = end - start + 1;
+  // add client to the list
+  clients.push(res);
 
-//   // set headers for transfer to client
-//   const headers = {
-//     "Content-Range": `bytes ${start}-${end}/${audioSize}`,
-//     "Accept-Ranges": "bytes",
-//     "Content-Length": contentLength,
-//     "Content-Type": "audio/mpeg",
-//     "Transfer-Encoding": "chunked",
-//   };
+  // ffmpegProcess.stdout.pipe(res);
 
-//   res.writeHead(206, headers);
+  ffmpegProcess.stderr.on("data", (data) => {
+    console.log(`FFmpeg error : ${data}`);
+  });
 
-//   // create audio stream
-//   const stream = createReadStream(filePath, { start, end });
-//   stream.pipe(res);
-// });
-
-// updated : API endpoint to stream audio from server to a BROWSER
-app.get("/audio", (req, res) => {
-  const filePath = path.join(ASSETS_PATH, "audio.mp3");
-  const CHUNK_SIZE = 8 * 1024; // 8KB chunk size (adjust as needed)
-
-  const range = req.headers.range || "bytes=0-"; // Default to start if no range
-  const audioSize = statSync(filePath).size;
-
-  const parts = range.replace(/bytes=/, "").split("-");
-  const start = parseInt(parts[0], 10);
-  const end = parts[1] ? parseInt(parts[1], 10) : audioSize - 1;
-  const contentLength = end - start + 1;
-
-  const headers = {
-    "Content-Range": `bytes ${start}-${end}/${audioSize}`,
-    "Accept-Ranges": "bytes",
-    "Content-Length": contentLength,
-    "Content-Type": "audio/mpeg", // Important for the initial request
-  };
-
-  res.writeHead(206, headers);
-
-  const stream = createReadStream(filePath, { start, end });
-  stream.pipe(res);
+  req.on("close", () => {
+    clients = clients.filter((client) => client !== res);
+  });
 });
 
-// using ffmpeg when audio file formate is mp3 so we need to decode
-// app.get("/audio", (req, res) => {
-//   const filePath = path.join(ASSETS_PATH, "audio.mp3"); // Path to your audio file
+app.get("/start", (req, res) => {
+  startStream();
+  res.send("Audio stream started.");
+});
 
-//   res.set({
-//     "Content-Type": "audio/wav",
-//     "Transfer-Encoding": "chunked",
-//     "Cache-Control": "no-cache",
-//     Connection: "keep-alive",
-//   });
-
-//   const ffmpeg = spawn("ffmpeg", [
-//     "-loglevel",
-//     "fatal",
-//     "-hide_banner",
-//     "-i",
-//     filePath,
-//     "-f",
-//     "wav", // Use mp3 directly instead of wav
-//     "-ac",
-//     "2", // Stereo channels
-//     "-ar",
-//     "44100", // Sample rate
-//     "-b:a",
-//     "128k", // Lower bitrate to reduce CPU load
-//     "-bufsize",
-//     "512k", // Adjust buffer size for smoother streaming
-//     "-fflags",
-//     "nobuffer", // Reduce buffering latency
-//     "pipe:1",
-//   ]);
-
-//   ffmpeg.stdout.pipe(res);
-
-//   ffmpeg.stderr.on("data", (data) => {
-//     console.log(`FFmpeg error : ${data}`);
-//   });
-
-//   ffmpeg.on("close", (code) => {
-//     console.log(`FFmpeg process exited with code ${code}`);
-//   });
-
-//   // const stream = createReadStream(filePath);
-//   // stream.pipe(res);
-// });
-
-// audio stream when there is wav audio file that is  uncompressed
-// app.get("/audio", (req, res) => {
-//   const filePath = path.join(ASSETS_PATH, "audio.wav"); // Use a WAV file
-//   const audioSize = statSync(filePath).size;
-
-//   // Set streaming headers
-//   res.writeHead(200, {
-//     "Content-Type": "audio/wav",
-//     "Content-Length": audioSize,
-//     "Transfer-Encoding": "chunked",
-//     Connection: "keep-alive",
-//   });
-
-//   // Stream the raw WAV file
-//   const stream = createReadStream(filePath);
-//   stream.pipe(res);
-// });
-
-// API endpoint to stream video from
-app.get("/video", (req, res) => {
-  const filePath = path.join(ASSETS_PATH, "video.mp4"); // path to video file
-  const CHUNK_SIZE = 4000 * 1e3; //  4MB chunk size
-
-  // send video in chunks
-  const range = req.headers.range || "0";
-  const videoSize = statSync(filePath).size; // get video size
-
-  // define start and end of current chunk
-  const start = Number(range.replace(/\D/g, ""));
-  const end = Math.min(start + CHUNK_SIZE, videoSize - 1);
-  const contentLength = end - start + 1;
-
-  // set headers for transfer to client
-  const headers = {
-    "Content-Range": `bytes ${start}-${end}/${videoSize}`,
-    "Accept-Ranges": "bytes",
-    "Content-Length": contentLength,
-    "Content-Type": "video/mp4",
-    "Transfer-Encoding": "chunked",
-  };
-
-  res.writeHead(206, headers);
-
-  // create audio stream
-  const stream = createReadStream(filePath, { start, end });
-  stream.pipe(res);
+app.get("/stop", (req, res) => {
+  stopStream();
+  res.send("Audio stream stopped.");
 });
 
 // run the app on port 3000
